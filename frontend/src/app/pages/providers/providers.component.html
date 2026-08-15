@@ -1,0 +1,252 @@
+<main class="page-providers">
+
+  <header class="intro">
+    <h2>Sites OAuth</h2>
+    <p>
+      Reliez vos comptes externes une seule fois ici. Les applications du lab —
+      et les outils de bureau autorisés — obtiennent ensuite un jeton en votre
+      nom sans jamais manipuler vos identifiants.
+    </p>
+  </header>
+
+  @if (notice()) {
+    <div class="banner banner-ok" role="status">
+      {{ notice() }}
+      <button type="button" class="banner-close" (click)="notice.set(null)" aria-label="Fermer">×</button>
+    </div>
+  }
+  @if (error()) {
+    <div class="banner banner-error" role="alert">
+      {{ error() }}
+      <button type="button" class="banner-close" (click)="error.set(null)" aria-label="Fermer">×</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <p class="loading">Chargement…</p>
+  } @else {
+
+    @if (isVaultAdmin() && editing() !== '__new__') {
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" (click)="startCreate()">
+          + Ajouter un site
+        </button>
+      </div>
+    }
+
+    @if (editing() === '__new__') {
+      <section class="card card-edit">
+        <h3>Nouveau site OAuth</h3>
+        <ng-container *ngTemplateOutlet="editForm"></ng-container>
+      </section>
+    }
+
+    @for (p of providers(); track p.slug) {
+      <section class="card">
+        <div class="card-head">
+          <div class="title-block">
+            <h3>{{ p.display_name }}</h3>
+            <code class="slug">{{ p.slug }}</code>
+          </div>
+          <div class="status-block">
+            @if (!p.enabled) {
+              <span class="badge badge-off">Désactivé</span>
+            } @else if (!p.is_configured) {
+              <span class="badge badge-warn">À configurer</span>
+            } @else if (connectionOf(p.slug)) {
+              <span class="badge badge-ok">Relié</span>
+            } @else {
+              <span class="badge">Non relié</span>
+            }
+          </div>
+        </div>
+
+        @if (connectionOf(p.slug); as conn) {
+          <dl class="dl-grid">
+            @if (conn.account_label) {
+              <dt>Compte</dt><dd>{{ conn.account_label }}</dd>
+            }
+            <dt>Portées</dt>
+            <dd>{{ conn.scope || '—' }}</dd>
+            <dt>Expiration</dt>
+            <dd>
+              @if (conn.expires_at) {
+                {{ conn.expires_at | date:'dd/MM/yyyy HH:mm' }}
+                @if (conn.is_expired) { <span class="badge badge-warn">expiré</span> }
+                @if (conn.has_refresh_token) { <span class="hint">renouvellement automatique</span> }
+              } @else {
+                <span class="hint">aucune — le site délivre un jeton durable</span>
+              }
+            </dd>
+            <dt>Relié le</dt>
+            <dd>{{ conn.created_at | date:'dd/MM/yyyy HH:mm' }}</dd>
+          </dl>
+        } @else if (p.is_configured) {
+          <p class="muted">
+            Portées demandées : <code>{{ p.default_scopes || '—' }}</code>
+          </p>
+        } @else {
+          <p class="muted">
+            Ce site n'a pas encore d'identifiants OAuth. Un développeur doit les
+            déposer avant qu'il devienne connectable.
+          </p>
+        }
+
+        <div class="actions">
+          @if (p.is_configured) {
+            @if (connectionOf(p.slug)) {
+              <button type="button" class="btn" (click)="connect(p.slug)">Reconnecter</button>
+              <button type="button" class="btn btn-danger" (click)="disconnect(p.slug)">Délier</button>
+            } @else {
+              <button type="button" class="btn btn-primary" (click)="connect(p.slug)">
+                Relier mon compte {{ p.display_name }}
+              </button>
+            }
+          }
+          @if (isVaultAdmin() && editing() !== p.slug) {
+            <button type="button" class="btn btn-ghost" (click)="startEdit(p)">Modifier</button>
+            <button type="button" class="btn btn-ghost btn-danger" (click)="remove(p)">Supprimer</button>
+          }
+        </div>
+
+        @if (isVaultAdmin()) {
+          <div class="callback">
+            <span class="callback-label">URI de rappel à enregistrer sur le site :</span>
+            <code>{{ p.callback_uri }}</code>
+            <button type="button" class="btn btn-ghost btn-small" (click)="copy(p.callback_uri)">Copier</button>
+          </div>
+          @if (p.notes) { <p class="notes">{{ p.notes }}</p> }
+          @if (p.updated_by) {
+            <p class="meta">
+              Dernière modification par {{ p.updated_by }},
+              le {{ p.updated_at | date:'dd/MM/yyyy HH:mm' }}
+            </p>
+          }
+        }
+
+        @if (editing() === p.slug) {
+          <div class="card-edit-inline">
+            <ng-container *ngTemplateOutlet="editForm"></ng-container>
+          </div>
+        }
+      </section>
+    }
+
+    @if (providers().length === 0) {
+      <section class="card">
+        <p class="muted">Aucun site OAuth enregistré pour l'instant.</p>
+      </section>
+    }
+  }
+
+  <!-- ── Formulaire partagé création / modification ────────────────────── -->
+  <ng-template #editForm>
+    <form class="form" (ngSubmit)="save()">
+      <div class="field">
+        <label for="f-slug">Identifiant court (slug)</label>
+        <input id="f-slug" name="slug" type="text" [(ngModel)]="draft.slug"
+               [disabled]="editing() !== '__new__'" required
+               placeholder="github" />
+        <small>
+          Utilisé dans les URLs de l'API : <code>/api/providers/&lt;slug&gt;/token/</code>.
+          Les applications tierces s'en servent — il n'est pas modifiable après création.
+        </small>
+      </div>
+
+      <div class="field">
+        <label for="f-name">Nom affiché</label>
+        <input id="f-name" name="display_name" type="text"
+               [(ngModel)]="draft.display_name" required placeholder="GitHub" />
+      </div>
+
+      <div class="field">
+        <label for="f-auth">URL d'autorisation</label>
+        <input id="f-auth" name="authorization_url" type="url"
+               [(ngModel)]="draft.authorization_url" required
+               placeholder="https://github.com/login/oauth/authorize" />
+      </div>
+
+      <div class="field">
+        <label for="f-token">URL de jeton</label>
+        <input id="f-token" name="token_url" type="url"
+               [(ngModel)]="draft.token_url" required
+               placeholder="https://github.com/login/oauth/access_token" />
+      </div>
+
+      <div class="field">
+        <label for="f-cid">Client ID</label>
+        <input id="f-cid" name="client_id" type="text"
+               [(ngModel)]="draft.client_id" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="f-secret">Client secret</label>
+        <input id="f-secret" name="client_secret" type="password"
+               [(ngModel)]="draft.client_secret" autocomplete="new-password"
+               placeholder="•••••••• (laisser vide pour conserver l'actuel)" />
+        <small>
+          Stocké chiffré et jamais réaffiché. Laisser vide conserve le secret
+          déjà enregistré ; toute valeur saisie le remplace.
+        </small>
+      </div>
+
+      <div class="field">
+        <label for="f-scopes">Portées par défaut</label>
+        <input id="f-scopes" name="default_scopes" type="text"
+               [(ngModel)]="draft.default_scopes" placeholder="read:user repo" />
+        <small>Séparées par des espaces, quel que soit le format attendu par le site.</small>
+      </div>
+
+      <div class="field-row">
+        <div class="field field-narrow">
+          <label for="f-sep">Séparateur de portées</label>
+          <input id="f-sep" name="scope_separator" type="text" maxlength="4"
+                 [(ngModel)]="draft.scope_separator" />
+          <small>Espace pour GitHub/GitLab/Google ; virgule pour quelques sites anciens.</small>
+        </div>
+
+        <div class="field field-check">
+          <label>
+            <input name="use_pkce" type="checkbox" [(ngModel)]="draft.use_pkce" />
+            Utiliser PKCE&nbsp;S256
+          </label>
+          <small>À décocher pour une OAuth App GitHub, qui ne le supporte pas.</small>
+        </div>
+
+        <div class="field field-check">
+          <label>
+            <input name="enabled" type="checkbox" [(ngModel)]="draft.enabled" />
+            Site actif
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-account">URL de profil (facultatif)</label>
+        <input id="f-account" name="account_url" type="url"
+               [(ngModel)]="draft.account_url"
+               placeholder="https://api.github.com/user" />
+        <small>Sert uniquement à afficher à l'utilisateur quel compte il a relié.</small>
+      </div>
+
+      <div class="field field-narrow">
+        <label for="f-labelfield">Champ du libellé</label>
+        <input id="f-labelfield" name="account_label_field" type="text"
+               [(ngModel)]="draft.account_label_field" placeholder="login" />
+      </div>
+
+      <div class="field">
+        <label for="f-notes">Notes pour l'équipe</label>
+        <textarea id="f-notes" name="notes" rows="3" [(ngModel)]="draft.notes"
+                  placeholder="Où l'application est enregistrée, par qui, particularités…"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
+        </button>
+        <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Annuler</button>
+      </div>
+    </form>
+  </ng-template>
+</main>

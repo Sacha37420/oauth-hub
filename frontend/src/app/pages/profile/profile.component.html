@@ -1,0 +1,64 @@
+<main class="page-profile">
+  @if (loading()) {
+    <p class="loading">Chargement…</p>
+  } @else if (error()) {
+    <div class="error-card">{{ error() }}</div>
+  } @else if (me()) {
+
+    <section class="card">
+      <h3>Mon profil</h3>
+      <dl class="dl-grid">
+        <dt>Utilisateur</dt> <dd>{{ me()!.username }}</dd>
+        <dt>E-mail</dt>      <dd>{{ me()!.email }}</dd>
+        <dt>Rôle</dt>
+        <dd>
+          @if (me()!.is_vault_admin) {
+            Développeur — peut déposer et modifier les identifiants des sites
+          } @else {
+            Membre — peut relier ses propres comptes externes
+          }
+        </dd>
+      </dl>
+
+      @if (me()!.groups.length > 0) {
+        <div class="groups">
+          @for (g of me()!.groups; track g) {
+            <span class="badge">{{ g }}</span>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="card">
+      <h3>Mes comptes reliés ({{ connections().length }})</h3>
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th>Site</th>
+            <th>Compte</th>
+            <th>Portées</th>
+            <th>Relié le</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of connections(); track c.provider) {
+            <tr>
+              <td>{{ c.provider_display_name }}</td>
+              <td>{{ c.account_label || '—' }}</td>
+              <td>{{ c.scope || '—' }}</td>
+              <td>{{ c.created_at | date:'dd/MM/yyyy' }}</td>
+            </tr>
+          }
+          @if (connections().length === 0) {
+            <tr>
+              <td colspan="4" class="empty">
+                Aucun compte relié — <a routerLink="/providers">voir les sites disponibles</a>.
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+  }
+</main>

@@ -1,0 +1,40 @@
+version: "3.9"
+
+networks:
+  sso-net:
+    external: true
+    name: sso-lab_sso-net
+  dev-net:
+    external: true
+    name: dev-net
+
+services:
+
+  backend:
+    build: ./backend
+    container_name: oauth-hub-backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8100:8000"
+    networks:
+      - sso-net
+      - dev-net
+    labels:
+      caddy: "${DOMAIN}"
+      caddy.handle_path: "/oauth-hub-api/*"
+      caddy.handle_path.reverse_proxy: "{{upstreams 8000}}"
+
+  frontend:
+    build: ./frontend
+    container_name: oauth-hub-frontend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "4215:80"
+    networks:
+      - sso-net
+    labels:
+      caddy: "${DOMAIN}"
+      caddy.handle_path: "/oauth-hub/*"
+      caddy.handle_path.reverse_proxy: "{{upstreams 80}}"
