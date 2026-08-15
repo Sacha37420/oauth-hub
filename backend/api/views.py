@@ -24,9 +24,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import oauth
-from .models import Connection, PendingAuthorization, Provider
-from .permissions import IsVaultAdminOrReadOnly
-from .serializers import ConnectionSerializer, ProviderSerializer
+from .models import Connection, PendingAuthorization, Provider, TrustedClient
+from .permissions import IsVaultAdminOrReadOnly, WritableFromHubOnly
+from .serializers import (
+    ConnectionSerializer, ProviderSerializer, TrustedClientSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +219,91 @@ class ProviderViewSet(viewsets.ModelViewSet):
         logger.warning(
             "Suppression du site '%s' par %s — %d connexion(s) supprimée(s).",
             instance.pk, self.request.user.email, count,
+        )
+        instance.delete()
+
+
+class TrustedClientViewSet(viewsets.ModelViewSet):
+    """CRUD sur les apps autorisées à réclamer un jeton amont.
+
+    Mêmes permissions que le coffre — et pour la même raison : ce sont deux
+    facettes du même pouvoir. Qui peut réécrire l'`authorization_url` d'un site
+    peut déjà détourner tout le lab ; lui refuser l'ajout d'un `client_id`
+    n'ajouterait aucune garantie, seulement un aller-retour par le `.env`.
+
+    La lecture est ouverte à tout compte authentifié comme pour les sites : la
+    liste ne contient aucun secret, seulement des `client_id` d'apps du lab —
+    valeurs déjà publiques, chaque SPA du lab exposant la sienne dans `env.js`.
+
+    L'écriture demande **en plus** de venir de l'interface d'oauth-hub
+    (`WritableFromHubOnly`) : une app tierce déjà autorisée ne doit pas pouvoir
+    s'ajouter des complices avec le jeton d'un dev qui l'utilise.
+
+    ⚠ Ce que cette classe ne fait PAS : décider qui est autorisé. Cette décision
+    vit dans `TrustedClient.is_trusted`, qui reste la seule autorité et applique
+    ses garde-fous même sur une ligne créée hors de cette API.
+    """
+
+    queryset = TrustedClient.objects.all()
+    serializer_class = TrustedClientSerializer
+    # IsAuthenticated d'abord — IsVaultAdminOrReadOnly laisse passer toute
+    # méthode sûre sans regarder l'identité (cf. sa docstring). WritableFromHubOnly
+    # ajoute la seule restriction propre à cette liste : on l'édite depuis
+    # l'interface d'oauth-hub, pas au travers d'une app tierce autorisée.
+    permission_classes = [IsAuthenticated, IsVaultAdminOrReadOnly, WritableFromHubOnly]
+    lookup_field = 'client_id'
+    lookup_value_regex = '[^/]+'
+
+    def list(self, request, *args, **kwargs):
+        """Liste des lignes, précédée de l'autorisation en dur d'oauth-hub.
+
+        Cette page répond à la question « qui peut obtenir mes jetons amont ? » :
+        en omettre le client d'oauth-hub lui-même donnerait une réponse fausse,
+        alors même qu'il est le premier concerné (c'est lui qui sert cette
+        interface). Marquée `locked`, la ligne se lit comme ce qu'elle est —
+        une autorisation permanente, sans bouton pour la retirer.
+        """
+        response = super().list(request, *args, **kwargs)
+        response.data = [
+            {
+                'client_id': settings.KEYCLOAK_CLIENT_ID,
+                'description': (
+                    "oauth-hub elle-même — l'interface que vous utilisez. "
+                    "Toujours autorisée : sans elle, une liste vide "
+                    "verrouillerait cette page."
+                ),
+                'enabled': True,
+                'locked': True,
+                'created_at': None,
+                'updated_at': None,
+                'updated_by': '',
+            },
+            *response.data,
+        ]
+        return response
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        logger.warning(
+            "Client '%s' AUTORISÉ à demander des jetons amont, par %s.",
+            instance.pk, self.request.user.email,
+        )
+
+    def perform_update(self, serializer):
+        was_enabled = serializer.instance.enabled
+        instance = serializer.save()
+        if was_enabled != instance.enabled:
+            logger.warning(
+                "Client '%s' %s par %s.",
+                instance.pk,
+                'RÉACTIVÉ' if instance.enabled else 'DÉSACTIVÉ',
+                self.request.user.email,
+            )
+
+    def perform_destroy(self, instance):
+        logger.warning(
+            "Client '%s' RÉVOQUÉ par %s — il ne peut plus demander de jeton amont.",
+            instance.pk, self.request.user.email,
         )
         instance.delete()
 

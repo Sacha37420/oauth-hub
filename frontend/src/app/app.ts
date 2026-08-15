@@ -34,6 +34,7 @@ export class AppComponent {
   readonly navItems: NavItem[] = [
     { path: '/',        label: 'Accueil', abbr: 'Ac', exact: true },
     { path: '/providers', label: 'Sites OAuth', abbr: 'Si' },
+    { path: '/trusted-clients', label: 'Apps autorisées', abbr: 'Ap' },
     { path: '/profile',   label: 'Profil',      abbr: 'Pr' },
   ];
 

@@ -84,12 +84,18 @@ KEYCLOAK_REQUIRED_GROUPS = config('KEYCLOAK_REQUIRED_GROUPS', default='')
 # Clients Keycloak autorisés à appeler cette API (claim `azp`). oauth-hub existe
 # pour être appelée par d'AUTRES apps au nom de leurs utilisateurs : l'égalité
 # stricte `azp == KEYCLOAK_CLIENT_ID` du template les bloquerait toutes. Même
-# mécanisme que `storage` (cf. CLAUDE.md, « Verrou 2 généralisé »).
+# mécanisme que `storage` (cf. CLAUDE.md, « Verrou 2 généralisé »), à une
+# différence près :
 #
-# ⚠ Chaque client ajouté ici obtient le droit de demander les jetons amont de
-# ses utilisateurs — donc d'agir sur GitHub (ou ailleurs) en leur nom. À tenir
-# app par app, jamais ouvert au realm.
-KEYCLOAK_TRUSTED_CLIENTS = {
+# ⚠ **Cette variable n'est plus lue à l'exécution.** La liste vit en base
+# (api.models.TrustedClient) et s'édite depuis la page « Apps autorisées » de
+# l'interface — modifier la valeur ci-dessous et recréer le conteneur n'a donc
+# plus aucun effet sur les autorisations. Elle ne sert qu'une fois, comme graine
+# de la migration 0003 sur une base qui n'a pas encore de table : c'est ce qui a
+# permis de reprendre la liste existante sans la ressaisir. La conserver ici
+# évite en plus qu'un ancien `.env` ne perde silencieusement son contenu au
+# premier déploiement.
+KEYCLOAK_TRUSTED_CLIENTS_SEED = {
     c.strip()
     for c in config('KEYCLOAK_TRUSTED_CLIENTS', default=KEYCLOAK_CLIENT_ID).split(',')
     if c.strip()

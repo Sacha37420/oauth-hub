@@ -9,6 +9,7 @@ Deux populations, à ne pas confondre :
                        lab. Une erreur ici casse la connexion de tout le monde,
                        et le secret déposé engage le lab entier auprès du site.
 """
+from django.conf import settings
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
@@ -45,3 +46,29 @@ class IsVaultAdminOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return bool(getattr(request.user, 'is_vault_admin', False))
+
+
+class WritableFromHubOnly(BasePermission):
+    """Écriture réservée aux requêtes venant de l'interface d'oauth-hub.
+
+    Posée sur la liste blanche `azp` (TrustedClientViewSet), en plus du contrôle
+    de groupe. Sans elle, **toute app déjà autorisée** pourrait, avec le jeton
+    d'un dev qui l'utilise, s'ajouter des complices dans la liste : elle détient
+    déjà les jetons amont de CE dev, mais y gagnerait ceux de tout le lab, sans
+    que personne ait rien décidé. Un jeton obtenu pour « analyser mes dépôts »
+    ne doit pas pouvoir servir à élargir la confiance du courtier.
+
+    Le dev garde exactement le même pouvoir, il l'exerce depuis la page prévue
+    pour ça — où l'écran lui dit ce qu'il accorde. La lecture reste ouverte : la
+    liste ne contient que des `client_id`, valeurs déjà publiques.
+    """
+
+    message = (
+        "La liste des apps autorisées ne se modifie que depuis l'interface "
+        "d'oauth-hub, jamais via une autre application du lab."
+    )
+
+    def has_permission(self, request, view) -> bool:
+        if request.method in SAFE_METHODS:
+            return True
+        return getattr(request.user, 'client_id', '') == settings.KEYCLOAK_CLIENT_ID

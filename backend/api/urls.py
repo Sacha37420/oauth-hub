@@ -10,10 +10,12 @@ from .views import (
     ProviderStatusView,
     ProviderViewSet,
     TokenView,
+    TrustedClientViewSet,
 )
 
 router = SimpleRouter()
 router.register('providers', ProviderViewSet, basename='provider')
+router.register('trusted-clients', TrustedClientViewSet, basename='trusted-client')
 
 # Les routes explicites passent AVANT celles du routeur : `providers/<slug>/`
 # du routeur est ancré en fin de chaîne et n'avalerait pas `…/token/`, mais

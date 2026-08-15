@@ -1,6 +1,6 @@
 """Modèles du coffre OAuth.
 
-Trois objets, et une règle de cardinalité qui structure toute l'app :
+Quatre objets, et une règle de cardinalité qui structure toute l'app :
 
   Provider              un SITE (github.com, gitlab.com…) — les identifiants
                         OAuth appartiennent au site, JAMAIS à l'app qui veut
@@ -9,9 +9,11 @@ Trois objets, et une règle de cardinalité qui structure toute l'app :
                         se partagent le même `client_id`/`client_secret`.
   Connection            le jeton d'UN utilisateur du lab pour UN site.
   PendingAuthorization  l'état éphémère d'un aller-retour vers le site.
+  TrustedClient         une app du lab autorisée à réclamer un jeton amont.
 """
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -233,3 +235,92 @@ class PendingAuthorization(models.Model):
         cutoff = timezone.now() - cls.TTL
         deleted, _ = cls.objects.filter(created_at__lt=cutoff).delete()
         return deleted
+
+
+class TrustedClient(models.Model):
+    """Une app du lab autorisée à réclamer les jetons amont de ses utilisateurs.
+
+    C'est la liste blanche `azp` du Verrou 2 (cf. api/authentication.py), sortie
+    du `.env` pour vivre en base et être tenue depuis l'interface par les mêmes
+    devs qui déposent les identifiants des sites.
+
+    **Pourquoi ce n'est pas un affaiblissement.** La population qui édite cette
+    table (`OAUTH_HUB_ADMIN_GROUPS`, cf. permissions.IsVaultAdmin) détient déjà
+    strictement plus : elle écrit `client_id`/`client_secret` et surtout
+    `authorization_url`/`token_url` de chaque Provider — donc elle peut déjà
+    détourner l'aller-retour OAuth de tout le lab vers un site qu'elle contrôle.
+    Autoriser un client de plus ne lui ouvre rien qu'elle ne puisse déjà obtenir.
+    Ce qui change, c'est le **délai** : autoriser ou surtout **révoquer** une app
+    ne demande plus d'éditer un `.env` et de recréer un conteneur, ce qui rend la
+    révocation immédiate au lieu d'être remise à plus tard.
+
+    Trois invariants tiennent la propriété de sécurité, et aucun n'est éditable :
+
+    1. **Le client d'oauth-hub lui-même est toujours autorisé**, en dur, sans
+       ligne en base — sinon une suppression malheureuse verrouillerait
+       l'interface qui sert à réparer la liste. Il n'y a donc aucun état d'où on
+       ne puisse pas revenir.
+    2. **`RESERVED_CLIENT_IDS` n'est jamais autorisable**, et le filtre est
+       appliqué ici — pas seulement dans le sérialiseur : une ligne insérée
+       directement en base (psql, fixture, import) reste inerte. C'est ce qui
+       préserve mot pour mot la règle du lab « `admin-cli` n'y figure jamais »,
+       le realm l'exposant en client public avec password grant.
+    3. **Aucun cache.** La vérification lit la table à chaque requête : un PK
+       lookup sur une table d'une poignée de lignes, contre une révocation qui
+       prend effet à la requête suivante. Un cache mémoire, même court, serait
+       par processus gunicorn — donc une révocation resterait partiellement sans
+       effet pendant sa durée, silencieusement.
+    """
+
+    #: Clients intégrés du realm — jamais des apps du lab, et `admin-cli` est
+    #: l'exact contournement contre lequel le contrôle `azp` existe.
+    RESERVED_CLIENT_IDS = frozenset({
+        'admin-cli',
+        'security-admin-console',
+        'account',
+        'account-console',
+        'broker',
+        'realm-management',
+    })
+
+    client_id = models.CharField(
+        primary_key=True, max_length=255,
+        help_text="Le `client_id` Keycloak de l'app appelante, tel quel.",
+    )
+    description = models.CharField(
+        max_length=255, blank=True,
+        help_text="À quoi sert cette app, et qui l'a demandée.",
+    )
+    enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Décocher coupe l'accès immédiatement sans perdre la fiche — "
+            "préférable à une suppression pour une coupure temporaire."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.EmailField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = 'trusted_clients'
+        ordering = ['client_id']
+
+    def __str__(self) -> str:
+        return self.client_id
+
+    @classmethod
+    def is_trusted(cls, azp: str) -> bool:
+        """Ce client a-t-il le droit d'appeler cette API ?
+
+        Ordre volontaire : le socle en dur d'abord (l'interface d'oauth-hub
+        répond même si la table est vide), la liste réservée ensuite (elle prime
+        sur toute ligne en base), la base en dernier.
+        """
+        if not azp:
+            return False
+        if azp == settings.KEYCLOAK_CLIENT_ID:
+            return True
+        if azp in cls.RESERVED_CLIENT_IDS:
+            return False
+        return cls.objects.filter(pk=azp, enabled=True).exists()

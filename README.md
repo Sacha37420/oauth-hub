@@ -218,14 +218,10 @@ confirmer. Pour désactiver temporairement, décochez plutôt **Site actif**.
 ## Étape 0 — se faire autoriser (obligatoire)
 
 Une app n'est pas autorisée par défaut. Son `client_id` Keycloak doit figurer
-dans `KEYCLOAK_TRUSTED_CLIENTS` du `.env` d'`oauth-hub` :
-
-```bash
-# oauth-hub/.env
-KEYCLOAK_TRUSTED_CLIENTS=oauth-hub,storage-analysis,mon-app
-```
-
-puis `docker compose -f oauth-hub/docker-compose.yml up -d --force-recreate backend`.
+dans la page **« Apps autorisées »** de l'interface : un dev (membre d'un groupe
+de `OAUTH_HUB_ADMIN_GROUPS`) l'y ajoute, ça prend effet à la requête suivante.
+Ni redémarrage, ni accès à l'hôte, ni changement côté Keycloak — c'est le claim
+`azp` du jeton que l'utilisateur présente déjà qui est comparé à cette liste.
 
 > **Ce que vous accordez en ajoutant une ligne ici** : cette app pourra obtenir le
 > jeton **brut** du site pour chacun de ses utilisateurs, et agir sur GitHub (ou
@@ -234,8 +230,22 @@ puis `docker compose -f oauth-hub/docker-compose.yml up -d --force-recreate back
 > le realm expose `admin-cli` en client public avec password grant, donc « tout
 > compte authentifié » signifierait « tout compte du lab, depuis n'importe où ».
 
-Aucun changement côté Keycloak n'est nécessaire : c'est le claim `azp` du jeton
-que l'utilisateur présente déjà qui est comparé à cette liste.
+Quatre garde-fous ne sont éditables par personne, dev compris :
+
+| Garde-fou | Pourquoi |
+|---|---|
+| Le client d'`oauth-hub` est autorisé **en dur** | Une liste vidée par erreur verrouillerait l'interface qui sert à la réparer. |
+| `admin-cli` & consorts sont **refusés** | Clients intégrés du realm, jamais des apps du lab. Le refus est appliqué à la vérification, pas seulement à la saisie : une ligne insérée directement en base reste inerte. |
+| **Aucun cache** de la liste | Une révocation prend effet à la requête suivante. Un cache mémoire serait par processus gunicorn, donc une révocation resterait partiellement sans effet, silencieusement. |
+| La liste ne s'édite **que depuis l'interface d'oauth-hub** | Une app déjà autorisée détient les jetons amont des utilisateurs qui s'en servent ; avec le jeton d'un dev, elle pourrait sinon s'ajouter des complices et gagner ceux de tout le lab. Lecture ouverte, écriture non. |
+
+`KEYCLOAK_TRUSTED_CLIENTS` (`oauth-hub/.env`) **n'est plus lue à l'exécution** :
+elle n'a servi qu'une fois, comme graine de la migration qui a repris la liste
+existante. Éditer le `.env` n'autorise ni ne révoque plus rien.
+
+> **Suspendre plutôt que révoquer.** Une fiche décochée refuse les appels
+> immédiatement mais garde sa description et sa trace de modification — le bon
+> geste pour une coupure temporaire ou un doute. « Révoquer » supprime la fiche.
 
 ## Le parcours complet, côté app consommatrice
 
@@ -667,7 +677,7 @@ par dépôt, qui n'était pas justifiée pour le premier usage.
 |---|---|
 | `OAUTH_HUB_ENCRYPTION_KEY` | Clé Fernet du coffre. Générée par `init-secrets.sh`, jamais régénérée. |
 | `OAUTH_HUB_ADMIN_GROUPS` | Groupes autorisés à modifier les identifiants (défaut `developers`). |
-| `KEYCLOAK_TRUSTED_CLIENTS` | Apps autorisées à demander un jeton amont. |
+| `KEYCLOAK_TRUSTED_CLIENTS` | **Graine initiale seulement, plus lue à l'exécution** — les apps autorisées se tiennent dans la page « Apps autorisées ». |
 | `OAUTH_HUB_ALLOWED_RETURN_HOSTS` | Hôtes acceptés dans `return_url`. La boucle locale est toujours acceptée en plus. |
 | `OAUTH_HUB_BACKEND_PUBLIC_URL` | Base de l'URI de rappel. Déduite de `DOMAIN`, à ne surcharger que pour un déploiement atypique. |
 
@@ -677,7 +687,7 @@ par dépôt, qui n'était pas justifiée pour le premier usage.
 |---|---|
 | `redirect_uri_mismatch` chez le site | L'URI enregistrée sur le site ne correspond pas à celle affichée sur la fiche. Recopiez-la depuis l'interface. |
 | « Requête de connexion inconnue ou déjà utilisée » | `state` expiré (10 min) ou callback rejoué. Recommencez la connexion. |
-| `403` « client non autorisé » | Le `client_id` de l'app appelante manque dans `KEYCLOAK_TRUSTED_CLIENTS`. |
+| `403` « client non autorisé » | Le `client_id` de l'app appelante manque dans la page « Apps autorisées », ou sa fiche y est suspendue. Le message d'erreur donne le `azp` reçu : c'est exactement la valeur à saisir. |
 | `403` « au moins un groupe » | Le compte n'a aucun groupe LDAP, ou un groupe récent manque dans `KEYCLOAK_REQUIRED_GROUPS`. |
 | « Secret illisible » dans les journaux | `OAUTH_HUB_ENCRYPTION_KEY` a changé depuis le chiffrement. |
 | Autorisation refusée par GitHub avec PKCE | Décochez **PKCE S256** sur la fiche : les OAuth Apps GitHub ne le supportent pas. |

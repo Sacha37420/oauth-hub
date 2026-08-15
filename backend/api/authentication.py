@@ -11,6 +11,12 @@ cette app :
    préservée : `admin-cli` n'y figure jamais, donc le password grant ouvert par
    défaut sur le realm ne donne accès à rien ici.
 
+   ⚠ Contrairement à `storage`, la liste ne vient **pas** du `.env` : elle vit
+   en base (`models.TrustedClient`) et s'édite depuis l'interface, par les mêmes
+   devs qui déposent les identifiants des sites. Le raisonnement de sécurité —
+   et les trois invariants non éditables qui le tiennent, dont l'impossibilité
+   d'autoriser `admin-cli` — est dans la docstring de `TrustedClient`.
+
 2. **« au moins un groupe »** plutôt qu'un groupe nommé. La règle voulue est :
    tout compte réellement rattaché au lab peut connecter ses propres comptes
    externes ; un compte fraîchement auto-inscrit, qui n'a encore aucun groupe,
@@ -27,6 +33,8 @@ from jwt import PyJWKClient, InvalidTokenError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.conf import settings
+
+from .models import TrustedClient
 
 
 class KeycloakUser:
@@ -105,11 +113,12 @@ class KeycloakJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed(f'Token invalide : {exc}') from exc
 
         azp = claims.get('azp')
-        if azp not in settings.KEYCLOAK_TRUSTED_CLIENTS:
+        if not TrustedClient.is_trusted(azp):
             raise AuthenticationFailed(
                 f"Ce token a été émis par un client non autorisé : '{azp}'. "
-                "Ajoutez ce client_id à KEYCLOAK_TRUSTED_CLIENTS dans "
-                "oauth-hub/.env pour l'autoriser à demander des jetons amont."
+                "Un développeur doit ajouter ce client_id dans la page « Apps "
+                "autorisées » d'oauth-hub pour lui permettre de demander des "
+                "jetons amont."
             )
 
         # Cloisonnement : au moins un groupe en commun. La liste vient de

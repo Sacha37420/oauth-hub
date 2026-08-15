@@ -44,6 +44,24 @@ export interface Connection {
   updated_at: string;
 }
 
+/** Une app du lab autorisée à réclamer les jetons amont de ses utilisateurs.
+ *  `locked` = autorisation en dur côté backend (oauth-hub elle-même) : la ligne
+ *  est renvoyée pour que la page dise la vérité sur qui peut obtenir un jeton,
+ *  mais elle n'est ni modifiable ni supprimable. */
+export interface TrustedClient {
+  client_id: string;
+  description: string;
+  enabled: boolean;
+  locked: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  updated_by: string;
+}
+
+export type TrustedClientDraft = Pick<
+  TrustedClient, 'client_id' | 'description' | 'enabled'
+>;
+
 export interface Me {
   email: string;
   username: string;
@@ -80,6 +98,29 @@ export class ApiService {
 
   deleteProvider(slug: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/api/providers/${slug}/`);
+  }
+
+  // ── Apps autorisées (lecture : tout le lab ; écriture : devs) ─────────────
+  listTrustedClients(): Observable<TrustedClient[]> {
+    return this.http.get<TrustedClient[]>(`${this.base}/api/trusted-clients/`);
+  }
+
+  createTrustedClient(draft: TrustedClientDraft): Observable<TrustedClient> {
+    return this.http.post<TrustedClient>(`${this.base}/api/trusted-clients/`, draft);
+  }
+
+  updateTrustedClient(
+    clientId: string, draft: Partial<TrustedClientDraft>,
+  ): Observable<TrustedClient> {
+    return this.http.patch<TrustedClient>(
+      `${this.base}/api/trusted-clients/${encodeURIComponent(clientId)}/`, draft,
+    );
+  }
+
+  deleteTrustedClient(clientId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/api/trusted-clients/${encodeURIComponent(clientId)}/`,
+    );
   }
 
   // ── Mes connexions ────────────────────────────────────────────────────────

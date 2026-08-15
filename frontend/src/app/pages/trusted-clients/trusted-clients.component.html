@@ -1,0 +1,177 @@
+<main class="page-trusted">
+
+  <header class="intro">
+    <h2>Apps autorisées</h2>
+    <p>
+      Seules les applications listées ici peuvent réclamer un jeton en votre nom.
+      Une app autorisée obtient le jeton <strong>brut</strong> du site pour
+      chacun de ses utilisateurs : elle agit sur GitHub (ou ailleurs) en leur
+      nom, avec toutes les portées accordées. La liste se tient donc app par
+      app, jamais ouverte à tout le lab.
+    </p>
+  </header>
+
+  @if (notice()) {
+    <div class="banner banner-ok" role="status">
+      {{ notice() }}
+      <button type="button" class="banner-close" (click)="notice.set(null)" aria-label="Fermer">×</button>
+    </div>
+  }
+  @if (error()) {
+    <div class="banner banner-error" role="alert">
+      {{ error() }}
+      <button type="button" class="banner-close" (click)="error.set(null)" aria-label="Fermer">×</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <p class="loading">Chargement…</p>
+  } @else {
+
+    @if (isVaultAdmin() && editing() !== '__new__') {
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" (click)="startCreate()">
+          + Autoriser une app
+        </button>
+      </div>
+    } @else if (!isVaultAdmin()) {
+      <p class="muted">
+        Lecture seule : seuls les membres du groupe des développeurs modifient
+        cette liste.
+      </p>
+    }
+
+    @if (editing() === '__new__') {
+      <section class="card card-edit">
+        <h3>Autoriser une app</h3>
+        <form class="form" (ngSubmit)="save()">
+          <div class="field">
+            <label for="t-cid">Client ID Keycloak</label>
+            <input id="t-cid" name="client_id" type="text" required
+                   [(ngModel)]="draft.client_id" autocomplete="off"
+                   placeholder="storage-analysis" />
+            <small>
+              Exactement le <code>client_id</code> du client Keycloak de l'app —
+              c'est lui que porte le claim <code>azp</code> de ses jetons, et la
+              comparaison est une égalité stricte. Aucun changement côté Keycloak
+              n'est nécessaire.
+            </small>
+          </div>
+
+          <div class="field">
+            <label for="t-desc">À quoi sert cette app</label>
+            <input id="t-desc" name="description" type="text"
+                   [(ngModel)]="draft.description"
+                   placeholder="Outil de bureau d'analyse de dépôts — demandé par …" />
+            <small>
+              Sert à décider, dans six mois, si cette ligne a encore lieu d'être.
+            </small>
+          </div>
+
+          <div class="field field-check">
+            <label>
+              <input name="enabled" type="checkbox" [(ngModel)]="draft.enabled" />
+              Autorisation active
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Enregistrement…' : 'Autoriser' }}
+            </button>
+            <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Annuler</button>
+          </div>
+        </form>
+      </section>
+    }
+
+    @for (c of clients(); track c.client_id) {
+      <section class="card">
+        <div class="card-head">
+          <div class="title-block">
+            <code class="client-id">{{ c.client_id }}</code>
+          </div>
+          <div class="status-block">
+            @if (c.locked) {
+              <span class="badge">Permanente</span>
+            } @else if (c.enabled) {
+              <span class="badge badge-ok">Autorisée</span>
+            } @else {
+              <span class="badge badge-off">Suspendue</span>
+            }
+          </div>
+        </div>
+
+        @if (c.description) {
+          <p class="muted">{{ c.description }}</p>
+        } @else {
+          <p class="muted">Aucune description — on ne sait pas pourquoi cette app est autorisée.</p>
+        }
+
+        @if (c.locked) {
+          <p class="notes">
+            Autorisée en dur, sans ligne en base : c'est l'interface que vous
+            utilisez. Sans elle, une liste vidée par erreur verrouillerait cette
+            page — il n'existe donc aucun état d'où l'on ne puisse pas revenir.
+          </p>
+        }
+
+        @if (!c.locked && isVaultAdmin()) {
+          <div class="actions">
+            @if (editing() !== c.client_id) {
+              <button type="button" class="btn" (click)="toggleEnabled(c)">
+                {{ c.enabled ? 'Suspendre' : 'Réactiver' }}
+              </button>
+              <button type="button" class="btn btn-ghost" (click)="startEdit(c)">Modifier</button>
+              <button type="button" class="btn btn-ghost btn-danger" (click)="revoke(c)">Révoquer</button>
+            }
+          </div>
+
+          @if (c.updated_by) {
+            <p class="meta">
+              Dernière modification par {{ c.updated_by }},
+              le {{ c.updated_at | date:'dd/MM/yyyy HH:mm' }}
+            </p>
+          }
+        }
+
+        @if (editing() === c.client_id) {
+          <div class="card-edit-inline">
+            <form class="form" (ngSubmit)="save()">
+              <div class="field">
+                <label for="t-cid-edit">Client ID Keycloak</label>
+                <input id="t-cid-edit" name="client_id_ro" type="text"
+                       [ngModel]="draft.client_id" [disabled]="true" />
+                <small>
+                  Non modifiable : le changer révoquerait cette app et en
+                  autoriserait une autre sous couvert d'une correction. Révoquez
+                  puis autorisez la bonne.
+                </small>
+              </div>
+
+              <div class="field">
+                <label for="t-desc-edit">À quoi sert cette app</label>
+                <input id="t-desc-edit" name="description" type="text"
+                       [(ngModel)]="draft.description" />
+              </div>
+
+              <div class="field field-check">
+                <label>
+                  <input name="enabled" type="checkbox" [(ngModel)]="draft.enabled" />
+                  Autorisation active
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" [disabled]="saving()">
+                  {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
+                </button>
+                <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Annuler</button>
+              </div>
+            </form>
+          </div>
+        }
+      </section>
+    }
+  }
+</main>
