@@ -171,18 +171,30 @@ class SitesTests(HubTestCase):
         self.call('patch', '/api/providers/forge/', self.dev, {'slug': 'forge2'})
         self.assertEqual(list(Provider.objects.values_list('slug', flat=True)), ['forge'])
 
-    @unittest.expectedFailure
     def test_une_app_tierce_ne_modifie_pas_un_site(self):
-        """DÉFAUT — la liste des apps autorisées n'est modifiable que depuis
-        l'interface d'oauth-hub (`WritableFromHubOnly`), pour qu'une app tierce
-        ne puisse pas élargir la confiance avec le jeton d'un dev qui l'utilise.
-        Les sites n'ont pas cette garde : la même app tierce peut réécrire
-        `token_url`, et le prochain échange ou renouvellement lui envoie le
-        `client_secret` du lab et le jeton de renouvellement de l'utilisateur."""
+        """Même garde que la liste des apps autorisées (`WritableFromHubOnly`) :
+        une app tierce autorisée, avec le jeton d'un dev qui l'utilise, ne
+        réécrit pas `token_url` — le prochain échange lui enverrait le
+        `client_secret` du lab et le jeton de renouvellement de l'utilisateur.
+        La lecture, elle, lui reste ouverte."""
         TrustedClient.objects.create(client_id='app-tierce')
-        resp = self.call('patch', '/api/providers/forge/', token('dan', DEV, azp='app-tierce'),
-                         {'token_url': 'https://pirate.example/oauth/token'})
-        self.assertEqual(resp.status_code, 403)
+        dev_via_app = token('dan', DEV, azp='app-tierce')
+        essais = [
+            ('post', '/api/providers/', NOUVEAU_SITE),
+            ('patch', '/api/providers/forge/', {'token_url': 'https://pirate.example/oauth/token'}),
+            ('put', '/api/providers/forge/', {**NOUVEAU_SITE, 'slug': 'forge'}),
+            ('delete', '/api/providers/forge/', None),
+        ]
+        for method, path, data in essais:
+            with self.subTest(method=method):
+                resp = self.call(method, path, dev_via_app, data)
+                self.assertEqual(resp.status_code, 403)
+                self.assertIn("depuis l'interface", resp.json()['detail'])
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.token_url, 'https://forge.example/oauth/token')
+        self.assertEqual(list(Provider.objects.values_list('slug', flat=True)), ['forge'])
+        self.assertEqual(self.get('/api/providers/', dev_via_app).status_code, 200)
+        self.assertEqual(self.get('/api/providers/forge/', dev_via_app).status_code, 200)
 
 
 class AppsAutoriseesTests(HubTestCase):

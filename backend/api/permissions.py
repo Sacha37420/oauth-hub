@@ -51,8 +51,8 @@ class IsVaultAdminOrReadOnly(BasePermission):
 class WritableFromHubOnly(BasePermission):
     """Écriture réservée aux requêtes venant de l'interface d'oauth-hub.
 
-    Posée sur la liste blanche `azp` (TrustedClientViewSet), en plus du contrôle
-    de groupe. Sans elle, **toute app déjà autorisée** pourrait, avec le jeton
+    Posée sur la liste blanche `azp` (TrustedClientViewSet) et sur les sites
+    (ProviderViewSet), en plus du contrôle de groupe. Sans elle, **toute app déjà autorisée** pourrait, avec le jeton
     d'un dev qui l'utilise, s'ajouter des complices dans la liste : elle détient
     déjà les jetons amont de CE dev, mais y gagnerait ceux de tout le lab, sans
     que personne ait rien décidé. Un jeton obtenu pour « analyser mes dépôts »
@@ -64,7 +64,7 @@ class WritableFromHubOnly(BasePermission):
     """
 
     message = (
-        "La liste des apps autorisées ne se modifie que depuis l'interface "
+        "Le coffre (sites et apps autorisées) ne se modifie que depuis l'interface "
         "d'oauth-hub, jamais via une autre application du lab."
     )
 

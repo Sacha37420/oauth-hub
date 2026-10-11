@@ -187,7 +187,11 @@ class ProviderViewSet(viewsets.ModelViewSet):
     serializer_class = ProviderSerializer
     # IsAuthenticated d'abord : IsVaultAdminOrReadOnly laisse passer toute
     # méthode sûre sans regarder l'identité, elle ne suffit donc jamais seule.
-    permission_classes = [IsAuthenticated, IsVaultAdminOrReadOnly]
+    # WritableFromHubOnly : même garde que la liste des apps autorisées. Sans
+    # elle, une app tierce autorisée pouvait, avec le jeton d'un dev qui
+    # l'utilise, réécrire `token_url` — et recevoir au prochain échange le
+    # `client_secret` du lab et le jeton de renouvellement de l'utilisateur.
+    permission_classes = [IsAuthenticated, IsVaultAdminOrReadOnly, WritableFromHubOnly]
     lookup_field = 'slug'
 
     def get_serializer_context(self):
