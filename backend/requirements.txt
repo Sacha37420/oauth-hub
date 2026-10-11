@@ -7,3 +7,4 @@ PyJWT>=2.8
 cryptography>=40.0
 django-cors-headers>=3.14.0
 requests>=2.31
+gunicorn>=23.0,<24.0
