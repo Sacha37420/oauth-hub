@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import unittest
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -189,16 +188,19 @@ class ReturnUrlTests(HubTestCase):
         self.assertNotIn('\\', resp['Location'])
         self.assertEqual(urlparse(resp['Location']).hostname, 'lab.example')
 
-    @unittest.expectedFailure
     def test_status_ne_relaie_pas_une_return_url_etrangere(self):
-        """DÉFAUT mineur — `ProviderStatusView` glisse `return_url` dans
-        `connect_url` sans le contrôle que fait `TokenView`. La valeur reste un
-        paramètre d'une URL du lab et `authorize` la refusera, mais une app
-        tierce reçoit un lien du lab qui transporte une adresse étrangère."""
+        """Même contrôle que `TokenView` : un lien du lab ne transporte pas une
+        adresse étrangère."""
         make_provider()
-        resp = self.get('/api/providers/forge/status/', token('alice'),
-                        {'return_url': 'https://evil.example/'})
-        self.assertNotIn('evil.example', resp.json()['connect_url'])
+        for url in ('https://evil.example/', 'https://evil.example\\@lab.example/',
+                    'javascript:alert(1)'):
+            with self.subTest(url=url):
+                resp = self.get('/api/providers/forge/status/', token('alice'), {'return_url': url})
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(query(resp.json()['connect_url']), {'connect': 'forge'})
+        resp = self.get('/api/providers/forge/status/', token('alice'), {'return_url': BOUCLE})
+        self.assertEqual(query(resp.json()['connect_url']),
+                         {'connect': 'forge', 'return_url': BOUCLE})
 
 
 class DepartTests(HubTestCase):

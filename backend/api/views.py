@@ -620,6 +620,11 @@ class ProviderStatusView(APIView):
 
     def get(self, request, slug: str):
         provider = _get_provider(slug)
+        # Même contrôle que TokenView : une adresse étrangère n'est pas relayée
+        # dans un lien du lab.
+        return_url = request.GET.get('return_url', '')
+        if not _is_safe_return_url(return_url):
+            return_url = ''
         connection = Connection.objects.filter(
             provider=provider, user_email=request.user.email,
         ).first()
@@ -630,5 +635,5 @@ class ProviderStatusView(APIView):
             'connected': connection is not None and not connection.is_expired,
             'scope': connection.scope if connection else '',
             'account_label': connection.account_label if connection else '',
-            'connect_url': _connect_url(slug, request.GET.get('return_url', '')),
+            'connect_url': _connect_url(slug, return_url),
         })
