@@ -145,20 +145,39 @@ class ReturnUrlTests(HubTestCase):
         self.assertEqual(query(resp.json()['connect_url']),
                          {'connect': 'forge', 'return_url': BOUCLE})
 
-    @unittest.expectedFailure
-    def test_antislash_avant_arobase(self):
-        """DÉFAUT — `urlparse` lit `lab.example` comme hôte de
-        `https://evil.example\\@lab.example/`, alors qu'un navigateur (règle
-        WHATWG : `\\` vaut `/`) irait sur `evil.example`. La fonction répond
-        « sûre ». Aujourd'hui sans effet sur la redirection finale : Django
-        encode l'antislash dans l'en-tête Location (test suivant)."""
-        for url in ('https://evil.example\\@lab.example/', 'https://evil.example\\@127.0.0.1/'):
+    def test_antislash_espace_et_caractere_de_controle_refuses(self):
+        """Refusés avant toute analyse : `urlparse` lit `lab.example` comme hôte
+        de `https://evil.example\\@lab.example/`, alors qu'un navigateur (règle
+        WHATWG : `\\` vaut `/`, tabulations et retours à la ligne retirés) irait
+        sur `evil.example`."""
+        for url in ('https://evil.example\\@lab.example/',
+                    'https://evil.example\\@127.0.0.1/',
+                    'https://lab.example\\evil.example/',
+                    'https://lab.example/chemin\\x',
+                    'http://127.0.0.1:8765/a b',
+                    ' https://lab.example/',
+                    'https://lab.example/ ',
+                    'https://lab.example/\t',
+                    'https://lab.example/\nLocation: https://evil.example',
+                    'https://lab.example/\r\nSet-Cookie: x=1',
+                    'https://evil.example\t@lab.example/',
+                    'ht\ntps://lab.example/',
+                    'https://lab.example/\x00',
+                    'https://lab.example/\x7f',
+                    'https://lab.example/\x85',
+                    'https://lab.example/\u00a0',
+                    'https://lab.example/\u2028'):
             with self.subTest(url=url):
                 self.assertFalse(_is_safe_return_url(url))
+        make_provider()
+        resp = self.get('/api/providers/forge/authorize/', token('alice'),
+                        {'return_url': 'https://evil.example\\@lab.example/'})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(PendingAuthorization.objects.count(), 0)
 
     def test_antislash_neutralise_a_la_redirection(self):
-        """Filet tenu par Django, pas par l'app : le Location émis n'a plus
-        d'antislash, donc plus de lecture divergente par le navigateur."""
+        """Second filet, tenu par Django : même pour un état déjà en base avec
+        une telle adresse, le Location émis n'a plus d'antislash."""
         site = make_provider()
         PendingAuthorization.objects.create(
             state='etat-antislash', provider=site, user_email='alice@ssolab.local',

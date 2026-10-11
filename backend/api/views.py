@@ -11,6 +11,7 @@ ordre :
                  lequel cette app existe.
 """
 import logging
+import unicodedata
 from urllib.parse import urlparse, urlencode
 
 from django.conf import settings
@@ -124,6 +125,13 @@ def _is_safe_return_url(url: str) -> bool:
     """
     if not url:
         return True  # absent ⇒ on retombera sur l'interface d'oauth-hub
+    # Refusé AVANT toute analyse : antislash, espace et caractère de contrôle
+    # sont lus différemment par `urlparse` et par un navigateur (règle WHATWG :
+    # `\` vaut `/`, tabulations et retours à la ligne sont retirés). Pour
+    # `https://evil.example\@lab.example/`, `urlparse` voit l'hôte du lab, un
+    # navigateur irait sur evil.example. Aucune URL légitime n'en contient.
+    if any(c == '\\' or c.isspace() or unicodedata.category(c) == 'Cc' for c in url):
+        return False
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https'):
         return False
