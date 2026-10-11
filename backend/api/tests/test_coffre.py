@@ -7,8 +7,6 @@ Trois propriétés tenues ici :
 """
 from __future__ import annotations
 
-import unittest
-
 from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
@@ -161,15 +159,21 @@ class SitesTests(HubTestCase):
         self.assertIn('dan@ssolab.local', ligne)
         self.assertIn('2 connexion', ligne)
 
-    # ── Défauts constatés (I4 : code de production inchangé) ──────────────────
-    @unittest.expectedFailure
+    # ── Défauts corrigés (dérogation de l'architecte à I4) ────────────────────
     def test_le_slug_ne_se_modifie_pas(self):
-        """DÉFAUT — « La création accepte de le choisir, la modification non »
-        (ProviderViewSet, README) : en réalité `slug` reste inscriptible. Comme
-        c'est la clé primaire, un PATCH qui le change INSÈRE une seconde fiche
-        (secret chiffré recopié) et laisse l'ancienne en place."""
-        self.call('patch', '/api/providers/forge/', self.dev, {'slug': 'forge2'})
-        self.assertEqual(list(Provider.objects.values_list('slug', flat=True)), ['forge'])
+        """`slug` est la clé primaire : inscriptible, un PATCH qui le change
+        insérerait une seconde fiche avec le secret recopié."""
+        for method, data in (('patch', {'slug': 'forge2', 'notes': 'n'}),
+                             ('put', {**NOUVEAU_SITE, 'slug': 'forge3'})):
+            with self.subTest(method=method):
+                resp = self.call(method, '/api/providers/forge/', self.dev, data)
+                self.assertEqual(resp.status_code, 200, resp.content)
+                self.assertEqual(resp.json()['slug'], 'forge')
+                self.assertEqual(list(Provider.objects.values_list('slug', flat=True)), ['forge'])
+        self.assertEqual(Provider.objects.get().notes, 'n')     # le reste du PATCH s'applique
+        # À la création il se choisit toujours, et reste unique.
+        self.assertEqual(self.call('post', '/api/providers/', self.dev, NOUVEAU_SITE).status_code, 201)
+        self.assertEqual(self.call('post', '/api/providers/', self.dev, NOUVEAU_SITE).status_code, 400)
 
     def test_une_app_tierce_ne_modifie_pas_un_site(self):
         """Même garde que la liste des apps autorisées (`WritableFromHubOnly`) :

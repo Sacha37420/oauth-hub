@@ -54,6 +54,16 @@ class ProviderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['updated_at', 'updated_by']
 
+    def get_fields(self):
+        # `slug` est la clé primaire ET l'identifiant d'URL dont dépendent les
+        # apps consommatrices : il se choisit à la création, jamais après. Le
+        # laisser inscriptible faisait d'un PATCH une INSERTION — une seconde
+        # fiche, secret chiffré recopié, l'ancienne laissée en place.
+        fields = super().get_fields()
+        if self.instance is not None:
+            fields['slug'].read_only = True
+        return fields
+
     def validate_scope_separator(self, value: str) -> str:
         # Un séparateur vide collerait les portées entre elles ('read:userrepo')
         # et produirait une demande d'autorisation silencieusement fausse.
