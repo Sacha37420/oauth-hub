@@ -101,6 +101,38 @@ class RemiseTests(HubTestCase):
         fiche.delete()
         self.assertRefuse(self.get('/api/providers/forge/token/', via_app))
 
+    def test_un_site_desactive_ne_remet_plus_de_jeton(self):
+        """« Site actif » décoché : coupure immédiate pour tout le lab, sans
+        perdre les connexions — rien n'est remis, rien n'est renouvelé, aucun
+        aller-retour ne démarre. Le statut continue de décrire le site."""
+        self.connexion.refresh_token = RENOUV_ALICE
+        self.connexion.expires_at = timezone.now() - timedelta(minutes=5)
+        self.connexion.save()
+        self.site.enabled = False
+        self.site.save()
+
+        with self.assertNoLogs('api.views', level='INFO'):
+            resp = self.get('/api/providers/forge/token/', self.alice)
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('désactivé', resp.json()['detail'])
+        self.assertNotIn(JETON_ALICE, resp.content.decode())
+        self.http_post.assert_not_called()                 # pas de renouvellement non plus
+        # Même refus pour qui n'a rien relié : pas de 409 l'invitant à relier un site coupé.
+        self.assertEqual(self.get('/api/providers/forge/token/', self.bob).status_code, 403)
+        self.assertEqual(self.get('/api/providers/forge/authorize/', self.alice).status_code, 400)
+
+        etat = self.get('/api/providers/forge/status/', self.alice)
+        self.assertEqual(etat.status_code, 200)
+        self.assertIs(etat.json()['configured'], False)
+
+        # Réactivé : la connexion est toujours là.
+        self.connexion.expires_at = None
+        self.connexion.save()
+        self.site.enabled = True
+        self.site.save()
+        resp = self.get('/api/providers/forge/token/', self.alice)
+        self.assertEqual(resp.json()['access_token'], JETON_ALICE)
+
     # ── Aucun autre endpoint ne rend un jeton ─────────────────────────────────
     def test_aucune_autre_lecture_ne_rend_un_jeton(self):
         self.connexion.refresh_token = RENOUV_ALICE

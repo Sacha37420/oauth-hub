@@ -19,7 +19,7 @@ from django.db import transaction
 from django.shortcuts import redirect
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -536,10 +536,19 @@ class TokenView(APIView):
       200  {access_token, token_type, scope, expires_at}
       409  aucune connexion (ou expirée sans moyen de la renouveler),
            avec `connect_url` : l'app peut y envoyer son utilisateur.
+      403  site désactivé (« Site actif » décoché).
     """
 
     def get(self, request, slug: str):
         provider = _get_provider(slug)
+        if not provider.enabled:
+            # « Site actif » décoché = coupure pour tout le lab, connexions
+            # conservées : ni remise, ni renouvellement. Pas un 409 : il
+            # inviterait à relier un site que `authorize` refuse déjà.
+            raise PermissionDenied(
+                f"Le site '{slug}' est désactivé dans oauth-hub : aucun jeton "
+                "n'est remis tant qu'un développeur ne l'a pas réactivé."
+            )
         return_url = request.GET.get('return_url', '')
         if not _is_safe_return_url(return_url):
             return_url = ''
