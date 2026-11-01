@@ -1,15 +1,7 @@
 import { Injectable } from '@angular/core';
 import Keycloak from 'keycloak-js';
-
-interface EnvWindow {
-  __env?: {
-    keycloakUrl?:      string;
-    keycloakRealm?:    string;
-    keycloakClientId?: string;
-    appUrl?:           string;
-    apiUrl?:           string;
-  };
-}
+import { loginRedirectUri } from './redirect-uri';
+import { labEnv } from './env';
 
 @Injectable({ providedIn: 'root' })
 export class KeycloakService {
@@ -21,7 +13,7 @@ export class KeycloakService {
    * La promesse ne se résout qu'une fois l'utilisateur authentifié.
    */
   async init(): Promise<boolean> {
-    const env = (window as unknown as EnvWindow).__env ?? {};
+    const env = labEnv();
 
     this.kc = new Keycloak({
       url:      env.keycloakUrl      ?? (window.location.protocol + '//' + window.location.hostname + ':8080'),
@@ -29,17 +21,15 @@ export class KeycloakService {
       clientId: env.keycloakClientId ?? 'oauth-hub',
     });
 
-    // L'URL courante complète (chemin compris), pas seulement l'origine ou la
-    // base de l'app (env.appUrl) : sinon tout lien profond (/projets/5…)
-    // atterrit sur la racine de l'app après le aller-retour Keycloak, y
-    // compris sur un simple F5 — le chemin demandé n'est jamais repris
-    // ensuite par le routeur Angular.
-    const redirectUri = window.location.href;
+    // La page demandée, pas l'accueil — mais seulement sous l'origine et le
+    // préfixe de l'app (voir core/redirect-uri.ts).
+    const redirectUri = loginRedirectUri(window.location.href, env.appUrl, window.location.origin);
 
     return this.kc.init({
       onLoad:           'login-required',
       checkLoginIframe: false,
       redirectUri,
+      pkceMethod:       'S256',
     });
   }
 

@@ -1,10 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-
-interface EnvWindow {
-  __env?: { apiUrl?: string };
-}
+import { apiUrl } from './env';
 
 /** Un site OAuth enregistré dans le coffre. Ne porte JAMAIS le client_secret :
  *  l'API ne le renvoie pas, seulement `has_client_secret`. */
@@ -75,8 +72,7 @@ export class ApiService {
   private http = inject(HttpClient);
 
   private get base(): string {
-    return (window as unknown as EnvWindow).__env?.apiUrl
-      ?? 'http://localhost:8100';
+    return apiUrl();
   }
 
   getMe(): Observable<Me> {

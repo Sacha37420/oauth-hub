@@ -21,14 +21,14 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 - [x] 98 tests backend (`test_flux`, `test_coffre`, `test_jeton`, `test_serrure`) ; `cloisonnement.spec.ts`
 **Vérifié le :** 2026-10-31 — relevé par lecture (version en service = `423744f`), tests non rejoués.
 
-## Lot 2 — Polices en chemin relatif   ·   statut : à faire
+## Lot 2 — Polices en chemin relatif   ·   statut : en cours
 **Objectif :** les polices Foyer se chargent.
 **Constat [C] :** `styles.scss:3-11` utilise `url("/assets/fonts/…")`, et `https://<domaine>/assets/fonts/…` répond 404.
 **Tâches :**
-- [ ] `url("assets/fonts/…")`, comme dans storage et app-builder
+- [x] `url("assets/fonts/…")`, comme dans storage et app-builder
 **Tests à passer avant de clore le lot :**
 - [ ] Les URL du CSS compilé sont relatives et répondent 200 ; police chargée en navigateur ; cloisonnement 3/3
-**Vérifié le :**
+**Vérifié le :** 2026-11-01 — non déployé. Image `oauth-hub-frontend:candidat` : CSS compilé en `url("./media/…woff2")` (relatif). 200 en service et navigateur : après déploiement.
 
 ## Lot 3 — Référence d'API complète   ·   statut : à faire
 **Objectif :** une app consommatrice trouve tout dans le README.
@@ -44,13 +44,13 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 - [ ] Relecture contre `api/urls.py`
 **Vérifié le :**
 
-## Lot 4 — Durcissement front et jetons courts   ·   statut : à faire
+## Lot 4 — Durcissement front et jetons courts   ·   statut : en cours
 **Objectif :** gabarit front aligné (T3) ; Ⓟ jetons GitHub à durée limitée.
 **Tâches :**
-- [ ] `tokenBases()` ; `redirectUri` limité à l'origine et au préfixe ; PKCE
+- [x] `tokenBases()` ; `redirectUri` limité à l'origine et au préfixe ; PKCE (chantier failles, I2) ; ports liés à `${LAB_BIND_ADDR:-127.0.0.1}` (I1)
 - [ ] Ⓟ GitHub App plutôt qu'OAuth App : les jetons d'une OAuth App n'expirent pas (`README.md:645-668`)
 - [ ] Ⓟ Pour un site désactivé, le statut garde `connected: true` : à garder ou à changer
 - [ ] Pages `home` et `profile` du gabarit : à fusionner ou à retirer
 **Tests à passer avant de clore le lot :**
 - [ ] Connexion et lien direct en navigateur ; aucun jeton envoyé vers une autre origine (`page.route`)
-**Vérifié le :**
+**Vérifié le :** 2026-11-01 — non déployé (première tâche seulement). `bash chantiers/tests/essai.sh oauth-hub` : 98 tests OK ; image `oauth-hub-frontend:candidat` construite (`S256` dans le bundle) ; `docker compose config` : `host_ip: 127.0.0.1`.
