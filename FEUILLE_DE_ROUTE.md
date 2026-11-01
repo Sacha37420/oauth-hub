@@ -54,3 +54,10 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 **Tests à passer avant de clore le lot :**
 - [ ] Connexion et lien direct en navigateur ; aucun jeton envoyé vers une autre origine (`page.route`)
 **Vérifié le :** 2026-11-01 — non déployé (première tâche seulement). `bash chantiers/tests/essai.sh oauth-hub` : 98 tests OK ; image `oauth-hub-frontend:candidat` construite (`S256` dans le bundle) ; `docker compose config` : `host_ip: 127.0.0.1`.
+
+## Mise en service — chantier « failles » (2026-11-01)
+Les mentions « non déployé » ci-dessus datent d'avant cette mise en service. Image construite pendant
+que l'ancienne tournait, `scripts/app-test.sh` : 98 tests OK, puis `up -d --no-build` ; ports
+publiés sur `127.0.0.1` ; client Keycloak passé en PKCE S256 exigé, URI de retour réduites à celles de
+l'app (`create-app-client.sh --pkce --prune-uris`) ; cloisonnement `lab-runner` 3/3 avant et après le durcissement du client, puis de nouveau 3/3 sur Keycloak 26.8.1.
+Restent les vérifications en navigateur réel notées dans les lots (images, coffres de clés, envois).
