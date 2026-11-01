@@ -27,7 +27,7 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 **Tâches :**
 - [x] `url("assets/fonts/…")`, comme dans storage et app-builder
 **Tests à passer avant de clore le lot :**
-- [ ] Les URL du CSS compilé sont relatives et répondent 200 ; police chargée en navigateur ; cloisonnement 3/3
+- [x] Les URL du CSS compilé sont relatives et répondent 200 ; police chargée en navigateur ; cloisonnement 3/3 — vérifié le 2026-11-01 (lab-runner, `e2e_member`)
 **Vérifié le :** 2026-11-01 — non déployé. Image `oauth-hub-frontend:candidat` : CSS compilé en `url("./media/…woff2")` (relatif). 200 en service et navigateur : après déploiement.
 
 ## Lot 3 — Référence d'API complète   ·   statut : à faire
@@ -52,7 +52,7 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 - [ ] Ⓟ Pour un site désactivé, le statut garde `connected: true` : à garder ou à changer
 - [ ] Pages `home` et `profile` du gabarit : à fusionner ou à retirer
 **Tests à passer avant de clore le lot :**
-- [ ] Connexion et lien direct en navigateur ; aucun jeton envoyé vers une autre origine (`page.route`)
+- [x] Connexion et lien direct en navigateur ; aucun jeton envoyé vers une autre origine (`page.route`) — vérifié le 2026-11-01 (lab-runner, `e2e_member`)
 **Vérifié le :** 2026-11-01 — non déployé (première tâche seulement). `bash chantiers/tests/essai.sh oauth-hub` : 98 tests OK ; image `oauth-hub-frontend:candidat` construite (`S256` dans le bundle) ; `docker compose config` : `host_ip: 127.0.0.1`.
 
 ## Mise en service — chantier « failles » (2026-11-01)
