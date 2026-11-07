@@ -576,17 +576,26 @@ Base : `https://<DOMAIN>/oauth-hub-api`. Tout requiert
 |---|---|---|---|
 | `GET` | `/api/me/` | tous | Identité, groupes, `is_vault_admin` |
 | `GET` | `/api/providers/` | tous | Liste des sites (**sans secret**) + `callback_uri` |
-| `POST` | `/api/providers/` | devs | Créer un site |
-| `PATCH` | `/api/providers/<slug>/` | devs | Modifier (secret vide = inchangé) |
-| `DELETE` | `/api/providers/<slug>/` | devs | Supprimer (cascade sur les connexions) |
+| `POST` | `/api/providers/` | devs, depuis l'interface d'oauth-hub | Créer un site |
+| `PATCH` | `/api/providers/<slug>/` | devs, depuis l'interface d'oauth-hub | Modifier (secret vide = inchangé) |
+| `DELETE` | `/api/providers/<slug>/` | devs, depuis l'interface d'oauth-hub | Supprimer (cascade sur les connexions) |
+| `GET` | `/api/trusted-clients/` | tous | Apps autorisées (« Apps autorisées » de l'interface) |
+| `POST` | `/api/trusted-clients/` | devs, depuis l'interface d'oauth-hub | Autoriser une app (`client_id`) |
+| `PATCH` | `/api/trusted-clients/<id>/` | devs, depuis l'interface d'oauth-hub | Suspendre, réactiver, décrire |
+| `DELETE` | `/api/trusted-clients/<id>/` | devs, depuis l'interface d'oauth-hub | Révoquer (supprime la fiche) |
 | `GET` | `/api/connections/` | tous | Mes connexions |
 | `DELETE` | `/api/connections/<slug>/` | tous | Délier un site |
 | `GET` | `/api/providers/<slug>/authorize/` | tous | Démarre le flux → `{authorization_url}` |
 | `GET` | `/api/callback/<slug>/` | **le site** | Retour du fournisseur (anonyme, protégé par `state`) |
-| `GET` | `/api/providers/<slug>/token/` | apps de confiance | **Le jeton amont** |
+| `GET` | `/api/providers/<slug>/token/` | apps de confiance | **Le jeton amont** ; `409` si pas relié, `403` si le site est désactivé (« Site actif » décoché) |
 | `GET` | `/api/providers/<slug>/status/` | apps de confiance | Relié ou non, sans transmettre le jeton |
 
-Documentation interactive : `https://<DOMAIN>/oauth-hub-api/api/docs/`.
+« devs » = membres d'un groupe de `OAUTH_HUB_ADMIN_GROUPS` ; « depuis l'interface d'oauth-hub » =
+jeton émis pour le client `oauth-hub` lui-même (`WritableFromHubOnly`, `backend/api/permissions.py`) :
+une autre app du lab, même autorisée, ne peut rien écrire, même avec le jeton d'un dev.
+
+La documentation interactive (`/api/docs/`, `/api/schema/`) n'existe qu'en `DEBUG`
+(`backend/config/urls.py:28`) : en service, elle répond 404.
 
 ---
 
@@ -617,8 +626,8 @@ groupe `developers`, réglable via `OAUTH_HUB_ADMIN_GROUPS`.
 Les `client_secret` des sites et les jetons amont des utilisateurs sont chiffrés
 (Fernet) avec `OAUTH_HUB_ENCRYPTION_KEY`, qui ne vit que dans `oauth-hub/.env`.
 
-Ce que ça protège : une fuite de données **froides** — sauvegarde de `devdb`,
-volume, dump SQL. C'est ce qui compte ici, parce que cette app écrit dans
+Ce que ça protège : une fuite de données **froides** — sauvegarde de la base
+`lab` (où vit le schéma `oauth_hub`), volume, dump SQL. C'est ce qui compte ici, parce que cette app écrit dans
 l'instance PostgreSQL **partagée** par tout le lab.
 
 Ce que ça ne protège pas, et qu'il ne faut pas se raconter : un attaquant qui
@@ -680,6 +689,7 @@ par dépôt, qui n'était pas justifiée pour le premier usage.
 | `KEYCLOAK_TRUSTED_CLIENTS` | **Graine initiale seulement, plus lue à l'exécution** — les apps autorisées se tiennent dans la page « Apps autorisées ». |
 | `OAUTH_HUB_ALLOWED_RETURN_HOSTS` | Hôtes acceptés dans `return_url`. La boucle locale est toujours acceptée en plus. |
 | `OAUTH_HUB_BACKEND_PUBLIC_URL` | Base de l'URI de rappel. Déduite de `DOMAIN`, à ne surcharger que pour un déploiement atypique. |
+| `OAUTH_HUB_FRONTEND_PUBLIC_URL` | Adresse publique de l'interface (`backend/config/settings.py:127`). Déduite de `DOMAIN` comme la précédente. |
 
 ### Dépannage
 
@@ -693,6 +703,15 @@ par dépôt, qui n'était pas justifiée pour le premier usage.
 | Autorisation refusée par GitHub avec PKCE | Décochez **PKCE S256** sur la fiche : les OAuth Apps GitHub ne le supportent pas. |
 
 ### Tests
+
+Tests backend (≈ 98 au dernier passage, 2026-11-01 ; tout appel sortant est simulé). Le rôle `lab`
+ne peut pas créer de base de test : depuis la racine du dépôt du lab,
+
+```bash
+bash chantiers/tests/essai.sh oauth-hub
+```
+
+Test de cloisonnement en navigateur réel (le moteur le joue après chaque déploiement ; à la main) :
 
 ```bash
 docker exec lab-runner sh -c "curl -s -X POST -H 'Content-Type: application/json' \
