@@ -21,7 +21,7 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 - [x] 98 tests backend (`test_flux`, `test_coffre`, `test_jeton`, `test_serrure`) ; `cloisonnement.spec.ts`
 **Vérifié le :** 2026-10-31 — relevé par lecture (version en service = `423744f`), tests non rejoués.
 
-## Lot 2 — Polices en chemin relatif   ·   statut : en cours
+## Lot 2 — Polices en chemin relatif   ·   statut : livré
 **Objectif :** les polices Foyer se chargent.
 **Constat [C] :** `styles.scss:3-11` utilise `url("/assets/fonts/…")`, et `https://<domaine>/assets/fonts/…` répond 404.
 **Tâches :**
@@ -29,8 +29,9 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 **Tests à passer avant de clore le lot :**
 - [x] Les URL du CSS compilé sont relatives et répondent 200 ; police chargée en navigateur ; cloisonnement 3/3 — vérifié le 2026-11-01 (lab-runner, `e2e_member`)
 **Vérifié le :** 2026-11-01 — non déployé. Image `oauth-hub-frontend:candidat` : CSS compilé en `url("./media/…woff2")` (relatif). 200 en service et navigateur : après déploiement.
+Statut passé à « livré » le 2026-11-08 (relecture de nuit) : tâche et test cochés, test en navigateur fait le 2026-11-01 (commit `271ec72`), mis en service le même jour (section « Mise en service » plus bas).
 
-## Lot 3 — Référence d'API complète   ·   statut : à faire
+## Lot 3 — Référence d'API complète   ·   statut : livré
 **Objectif :** une app consommatrice trouve tout dans le README.
 **Constat [C] :**
 - La référence (`README.md:570-588`) ne liste pas `/api/trusted-clients/` et ne mentionne pas le 403
@@ -39,10 +40,16 @@ de l'utilisateur aux apps de la liste blanche (`TrustedClient`, éditée dans l'
 - Elle renvoie vers `/api/docs/`, en 404 hors DEBUG (l. 590).
 - § Tests ne donne pas la commande backend.
 **Tâches :**
-- [ ] Corriger ces cinq points
+- [x] Corriger ces cinq points (travail de nuit du 2026-11-08 : routes `/api/trusted-clients/`, 403
+  « site désactivé », écriture « depuis l'interface d'oauth-hub » (`WritableFromHubOnly`), `/api/docs/`
+  en DEBUG seulement, commande des tests backend ; en plus : `OAUTH_HUB_FRONTEND_PUBLIC_URL` ajoutée
+  aux variables, « sauvegarde de `devdb` » → base `lab`)
 **Tests à passer avant de clore le lot :**
-- [ ] Relecture contre `api/urls.py`
-**Vérifié le :**
+- [x] Relecture contre `api/urls.py`
+**Vérifié le :** 2026-11-08 — relecture de la référence contre `backend/api/urls.py` (routeur `providers`
+et `trusted-clients`, routes explicites), `backend/api/views.py` (`TokenView`, 403 l. 544),
+`backend/api/permissions.py` (`WritableFromHubOnly`), `backend/config/urls.py:28` (DEBUG),
+`backend/config/settings.py:107-138`. Documentation seule, aucun code changé.
 
 ## Lot 4 — Durcissement front et jetons courts   ·   statut : en cours
 **Objectif :** gabarit front aligné (T3) ; Ⓟ jetons GitHub à durée limitée.
