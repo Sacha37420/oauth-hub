@@ -132,10 +132,15 @@ def _is_safe_return_url(url: str) -> bool:
     # navigateur irait sur evil.example. Aucune URL légitime n'en contient.
     if any(c == '\\' or c.isspace() or unicodedata.category(c) == 'Cc' for c in url):
         return False
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or '').lower()
+    except ValueError:
+        # `urlparse` lève sur un crochet mal fermé (`http://[x/`) : un refus,
+        # pas une erreur 500.
+        return False
     if parsed.scheme not in ('http', 'https'):
         return False
-    host = (parsed.hostname or '').lower()
     if host in ('127.0.0.1', '::1', 'localhost'):
         return True
     allowed = {

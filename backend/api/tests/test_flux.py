@@ -528,3 +528,49 @@ class RetourTests(HubTestCase):
         self.fournisseur_ok(expires_in='bientôt')          # hors norme : non expirant
         self.retour(state=state, code='c')
         self.assertIsNone(Connection.objects.get().expires_at)
+
+    # ── Ce que l'échec de l'échange laisse voir ───────────────────────────────
+    def test_l_echec_de_l_echange_ne_recopie_ni_url_ni_corps(self):
+        """Le texte d'une exception `requests` porte l'URL demandée, et une page
+        d'erreur peut renvoyer la requête reçue : ni l'un ni l'autre ne doit
+        finir au journal ni dans la redirection (`oauth_error`)."""
+        fuite_url = 'parametre-secret-0123'
+        cas = {
+            'injoignable': dict(side_effect=requests.ConnectionError(
+                f'Max retries exceeded with url: /oauth/token?k={fuite_url}')),
+            'corps_illisible': dict(return_value=reponse(
+                502, None, f'<html>client_secret={SECRET_SITE}</html>')),
+        }
+        for nom, comportement in cas.items():
+            with self.subTest(cas=nom):
+                state = self.depart()
+                self.http_post.reset_mock(return_value=True, side_effect=True)
+                self.http_post.configure_mock(**comportement)
+                with self.assertLogs('api.views', level='WARNING') as journal:
+                    resp = self.retour(state=state, code='c')
+                self.assertErreur(resp, 'exchange_failed')
+                for fuite in (fuite_url, SECRET_SITE):
+                    self.assertNotIn(fuite, resp['Location'])
+                    self.assertNotIn(fuite, '\n'.join(journal.output))
+                self.assertEqual(Connection.objects.count(), 0)
+
+
+class ReturnUrlMalFormeeTests(HubTestCase):
+    """Une `return_url` que `urlparse` ne sait pas lire (crochet mal fermé) est
+    un refus, jamais une erreur 500."""
+
+    MAL_FORMEES = ('http://[evil/', 'https://lab.example]/', 'http://[::1')
+
+    def test_refusee_par_la_fonction(self):
+        for url in self.MAL_FORMEES:
+            with self.subTest(url=url):
+                self.assertFalse(_is_safe_return_url(url))
+
+    def test_refusee_en_400_au_depart(self):
+        make_provider()
+        tok = token('alice')
+        for url in self.MAL_FORMEES:
+            with self.subTest(url=url):
+                resp = self.get('/api/providers/forge/authorize/', tok, {'return_url': url})
+                self.assertEqual(resp.status_code, 400)
+        self.assertEqual(PendingAuthorization.objects.count(), 0)

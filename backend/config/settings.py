@@ -230,3 +230,20 @@ TEMPLATES = [
         },
     },
 ]
+
+# ── Journal ────────────────────────────────────────────────────────────────────
+# Chaque remise de jeton amont est journalisée (`logger.info`, api/views.py).
+# Sans ce réglage, Django ne configure que le logger `django` : un INFO du
+# logger `api` n'avait aucun gestionnaire et était jeté, en service comme
+# ailleurs (seuls les avertissements sortaient, par le gestionnaire de dernier
+# recours de Python). Sortie d'erreur standard, donc `docker logs`.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'loggers': {
+        'api': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
