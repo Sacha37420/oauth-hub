@@ -262,3 +262,14 @@ class RenouvellementTests(HubTestCase):
                 self.assertEqual([r.levelname for r in journal.records], ['WARNING'])
                 self.assertNotIn(RENOUV_ALICE, journal.output[0])
         self.assertEqual(Connection.objects.get().access_token, JETON_ALICE)
+
+
+class JournalEnServiceTests(HubTestCase):
+    """La remise est journalisée en `INFO` : ce niveau doit sortir en service,
+    pas seulement sous `assertLogs` (qui pose son propre gestionnaire)."""
+
+    def test_le_journal_des_remises_a_une_sortie(self):
+        import logging
+        journal = logging.getLogger('api.views')
+        self.assertTrue(journal.isEnabledFor(logging.INFO))
+        self.assertTrue(journal.hasHandlers())

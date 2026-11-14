@@ -127,14 +127,20 @@ def _post_token(provider: Provider, data: dict) -> TokenResponse:
             timeout=HTTP_TIMEOUT,
         )
     except requests.RequestException as exc:
-        raise OAuthError(f'Site injoignable : {exc}') from exc
+        # Message fixe : le texte d'une exception `requests` porte l'URL
+        # demandée (paramètres compris), et ce message part au journal et dans
+        # la redirection vers le navigateur (`oauth_error`).
+        raise OAuthError(
+            f'Site injoignable ({type(exc).__name__}).'
+        ) from exc
 
     try:
         payload = response.json()
     except ValueError as exc:
+        # Le corps n'est pas recopié : une page d'erreur peut renvoyer la
+        # requête reçue, `client_secret` compris.
         raise OAuthError(
-            f'Réponse illisible du site (HTTP {response.status_code}) : '
-            f'{response.text[:200]}'
+            f'Réponse illisible du site (HTTP {response.status_code}).'
         ) from exc
 
     if response.status_code >= 400:

@@ -104,6 +104,9 @@ class KeycloakJWTAuthentication(BaseAuthentication):
                 algorithms=['RS256'],
                 options={
                     'verify_exp': True,
+                    # PyJWT ne vérifie `exp` que s'il est présent : un jeton
+                    # sans échéance serait valable pour toujours.
+                    'require': ['exp'],
                     # L'audience varie selon le client Keycloak appelant ; c'est
                     # `azp` qui porte le contrôle, cf. docstring du module.
                     'verify_aud': False,

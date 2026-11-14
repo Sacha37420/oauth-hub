@@ -208,3 +208,18 @@ class IsTrustedTests(HubTestCase):
         with self.assertNumQueries(0):
             TrustedClient.is_trusted(HUB)
             TrustedClient.is_trusted('admin-cli')
+
+
+class EcheanceObligatoireTests(HubTestCase):
+    """PyJWT ne vérifie `exp` que s'il est présent : un jeton signé sans
+    échéance doit être refusé, pas accepté pour toujours."""
+
+    def test_jeton_sans_exp_refuse(self):
+        import time
+
+        from .base import _RSA
+        tok = jwt.encode({
+            'preferred_username': 'alice', 'email': 'alice@ssolab.local',
+            'groups': MEMBRE, 'azp': HUB, 'iat': int(time.time()) - 5,
+        }, _RSA, algorithm='RS256')
+        self.assertRefuse(self.get('/api/me/', tok), 'Token invalide')
