@@ -230,3 +230,15 @@ TEMPLATES = [
         },
     },
 ]
+
+# Journal de l'app : sans ce bloc, Django ne configure que ses propres loggers
+# et les `logger.info` d'`api` (« Jeton … remis à l'app … », connexions
+# établies) étaient perdus sous gunicorn — or chaque remise de jeton doit être
+# journalisée (CLAUDE.md du lab, « oauth-hub »). Sortie sur la console du
+# conteneur (`docker logs`).
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {'api': {'handlers': ['console'], 'level': 'INFO'}},
+}
